@@ -6,6 +6,8 @@ import androidx.room.Delete
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -18,6 +20,9 @@ interface ExpenseDao {
 
     @Query("SELECT * FROM expenses WHERE billId IS NOT NULL AND billDueEpochDay BETWEEN :from AND :to")
     suspend fun billPaymentsDueBetweenOnce(from: Long, to: Long): List<Expense>
+
+    @Query("SELECT billId, COUNT(*) AS paid FROM expenses WHERE billId IS NOT NULL GROUP BY billId")
+    fun paidCountsPerBill(): Flow<List<BillPaidCount>>
 
     @Upsert
     suspend fun upsert(expense: Expense)
@@ -53,9 +58,20 @@ interface PeriodBudgetDao {
     suspend fun clear(start: Long)
 }
 
-@Database(entities = [Expense::class, Bill::class, PeriodBudget::class], version = 1, exportSchema = false)
+data class BillPaidCount(val billId: Long, val paid: Int)
+
+@Database(entities = [Expense::class, Bill::class, PeriodBudget::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun billDao(): BillDao
     abstract fun periodBudgetDao(): PeriodBudgetDao
+
+    companion object {
+        /** v2: optional number of payments for recurring bills (loans, installments). */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE bills ADD COLUMN totalPayments INTEGER")
+            }
+        }
+    }
 }

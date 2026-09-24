@@ -5,6 +5,7 @@ import com.paydayplanner.app.data.Expense
 import com.paydayplanner.app.data.Settings
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 import kotlin.math.min
 
 /** How far back unpaid bills are still shown as overdue. */
@@ -43,7 +44,25 @@ object Periods {
 data class BillDue(val bill: Bill, val dueDate: LocalDate, val payment: Expense?) {
     val paid: Boolean get() = payment != null
     val amountCents: Long get() = payment?.amountCents ?: bill.amountCents
+
+    /** "4 of 12" for bills with a fixed number of payments, otherwise null. */
+    val installment: String?
+        get() = bill.limitedPayments?.let { "${bill.paymentNumber(dueDate)} of $it" }
 }
+
+/** Number of payments for a recurring bill that ends (e.g. a loan), or null if it doesn't end. */
+val Bill.limitedPayments: Int? get() = totalPayments?.takeIf { recurring && it > 0 }
+
+private val Bill.firstMonth: YearMonth get() = YearMonth.from(LocalDate.ofEpochDay(startEpochDay))
+
+private fun Bill.dueDateIn(month: YearMonth): LocalDate = month.atDay(min(dueDay, month.lengthOfMonth()))
+
+/** 1-based payment number of the occurrence due in [date]'s month. */
+fun Bill.paymentNumber(date: LocalDate): Int =
+    ChronoUnit.MONTHS.between(firstMonth, YearMonth.from(date)).toInt() + 1
+
+/** Due date of the final payment, for bills with a fixed number of payments. */
+fun Bill.lastDueDate(): LocalDate? = limitedPayments?.let { dueDateIn(firstMonth.plusMonths(it - 1L)) }
 
 fun Bill.dueDatesBetween(from: LocalDate, to: LocalDate): List<LocalDate> {
     if (from.isAfter(to)) return emptyList()
@@ -51,12 +70,11 @@ fun Bill.dueDatesBetween(from: LocalDate, to: LocalDate): List<LocalDate> {
     if (!recurring) return if (start.isWithin(from, to)) listOf(start) else emptyList()
 
     val result = mutableListOf<LocalDate>()
-    var month = YearMonth.from(from)
-    val last = YearMonth.from(to)
-    val firstMonth = YearMonth.from(start)
+    var month = maxOf(YearMonth.from(from), firstMonth)
+    val last = lastDueDate()?.let { minOf(YearMonth.from(it), YearMonth.from(to)) } ?: YearMonth.from(to)
     while (!month.isAfter(last)) {
-        val date = month.atDay(min(dueDay, month.lengthOfMonth()))
-        if (date.isWithin(from, to) && !month.isBefore(firstMonth)) result += date
+        val date = dueDateIn(month)
+        if (date.isWithin(from, to)) result += date
         month = month.plusMonths(1)
     }
     return result

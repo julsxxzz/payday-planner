@@ -55,10 +55,16 @@ fun MoneyField(
 }
 
 @Composable
-fun NumberField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
+fun NumberField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    maxDigits: Int = 2,
+) {
     OutlinedTextField(
         value = value,
-        onValueChange = { v -> if (v.length <= 2 && v.all(Char::isDigit)) onValueChange(v) },
+        onValueChange = { v -> if (v.length <= maxDigits && v.all(Char::isDigit)) onValueChange(v) },
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

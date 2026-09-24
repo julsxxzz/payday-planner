@@ -30,7 +30,8 @@ data class Expense(
  * A "to be paid" bill.
  * - One-time: due on [startEpochDay].
  * - Recurring: due every month on [dueDay] (clamped to the month's last day),
- *   starting with the month of [startEpochDay].
+ *   starting with the month of [startEpochDay]. If [totalPayments] is set (e.g. a loan),
+ *   it stops after that many monthly payments.
  */
 @Entity(tableName = "bills")
 data class Bill(
@@ -42,6 +43,7 @@ data class Bill(
     val dueDay: Int,
     val startEpochDay: Long,
     val active: Boolean = true,
+    val totalPayments: Int? = null,
 )
 
 /** Per-period override of income and spending cap (defaults come from Settings). */

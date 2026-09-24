@@ -26,6 +26,7 @@ import com.paydayplanner.app.data.Expense
 import com.paydayplanner.app.domain.BillDue
 import com.paydayplanner.app.domain.Dates
 import com.paydayplanner.app.domain.Money
+import com.paydayplanner.app.domain.lastDueDate
 import java.time.LocalDate
 
 @Composable
@@ -109,6 +110,7 @@ fun BillDialog(
     var category by remember { mutableStateOf(initial?.category ?: "Bills & Utilities") }
     var recurring by remember { mutableStateOf(initial?.recurring ?: true) }
     var active by remember { mutableStateOf(initial?.active ?: true) }
+    var payments by remember { mutableStateOf(initial?.totalPayments?.toString() ?: "") }
     var date by remember {
         mutableStateOf(
             initial?.let {
@@ -119,6 +121,18 @@ fun BillDialog(
         )
     }
     val cents = Money.parse(amount)
+    val totalPayments = payments.toIntOrNull()?.takeIf { recurring && it > 0 }
+    val draft = Bill(
+        id = initial?.id ?: 0,
+        name = name.trim(),
+        amountCents = cents ?: 0,
+        category = category,
+        recurring = recurring,
+        dueDay = date.dayOfMonth,
+        startEpochDay = date.toEpochDay(),
+        active = active,
+        totalPayments = totalPayments,
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -137,10 +151,17 @@ fun BillDialog(
                 LabeledSwitch("Repeats every month", recurring) { recurring = it }
                 DateField(if (recurring) "First due date" else "Due date", date) { date = it }
                 if (recurring) {
-                    Text(
-                        "Due on the ${Dates.ordinal(date.dayOfMonth)} of every month, starting ${Dates.long(date)}.",
-                        style = MaterialTheme.typography.bodySmall,
+                    NumberField(
+                        payments,
+                        { payments = it },
+                        "Number of payments (optional)",
+                        Modifier.fillMaxWidth(),
+                        maxDigits = 3,
                     )
+                    val schedule = "Due on the ${Dates.ordinal(date.dayOfMonth)} of every month, starting ${Dates.long(date)}."
+                    val ending = draft.lastDueDate()?.let { " Last payment on ${Dates.long(it)}." }
+                        ?: " Leave the number empty if it never ends, e.g. rent or internet."
+                    Text(schedule + ending, style = MaterialTheme.typography.bodySmall)
                 }
                 if (initial != null) LabeledSwitch("Active", active) { active = it }
             }
@@ -148,20 +169,7 @@ fun BillDialog(
         confirmButton = {
             TextButton(
                 enabled = name.isNotBlank() && cents != null && cents > 0,
-                onClick = {
-                    onSave(
-                        Bill(
-                            id = initial?.id ?: 0,
-                            name = name.trim(),
-                            amountCents = cents!!,
-                            category = category,
-                            recurring = recurring,
-                            dueDay = date.dayOfMonth,
-                            startEpochDay = date.toEpochDay(),
-                            active = active,
-                        ),
-                    )
-                },
+                onClick = { onSave(draft) },
             ) { Text("Save") }
         },
         dismissButton = {

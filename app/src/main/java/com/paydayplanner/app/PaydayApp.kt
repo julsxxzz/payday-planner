@@ -17,7 +17,9 @@ import java.util.concurrent.TimeUnit
 
 /** Simple manual dependency container shared by the whole app. */
 class AppContainer(app: Application) {
-    val db: AppDatabase = Room.databaseBuilder(app, AppDatabase::class.java, "payday.db").build()
+    val db: AppDatabase = Room.databaseBuilder(app, AppDatabase::class.java, "payday.db")
+        .addMigrations(AppDatabase.MIGRATION_1_2)
+        .build()
     val settings = SettingsRepository(app)
 }
 

@@ -266,12 +266,13 @@ private fun EmptyHint(text: String) {
 @Composable
 private fun BillDueRow(due: BillDue, currency: String, overdue: Boolean, onToggle: (BillDue) -> Unit) {
     val errorColor = MaterialTheme.colorScheme.error
-    val subtitle = when {
+    val status = when {
         due.paid -> "Paid ${Dates.short(LocalDate.ofEpochDay(due.payment!!.epochDay))} · due ${Dates.short(due.dueDate)}"
         overdue -> "Was due ${Dates.long(due.dueDate)}"
         due.dueDate == LocalDate.now() -> "Due today"
         else -> "Due ${Dates.short(due.dueDate)}"
     }
+    val subtitle = due.installment?.let { "$status · payment $it" } ?: status
     Card(
         onClick = { onToggle(due) },
         colors = CardDefaults.cardColors(
