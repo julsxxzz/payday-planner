@@ -7,3 +7,6 @@ build/
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Release signing key and its passwords: never commit, back up separately
+signing/
