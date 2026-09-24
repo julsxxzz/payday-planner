@@ -1,0 +1,4 @@
+<resources>
+    <style name="Theme.PaydayPlanner" parent="android:Theme.Material.Light.NoActionBar" />
+    <color name="ic_launcher_background">#006B55</color>
+</resources>

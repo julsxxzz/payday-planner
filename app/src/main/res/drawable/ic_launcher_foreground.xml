@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Calendar with a check mark -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,38h36a4,4 0 0 1 4,4v28a4,4 0 0 1 -4,4h-36a4,4 0 0 1 -4,-4v-28a4,4 0 0 1 4,-4z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M41,32h5v10h-5z M62,32h5v10h-5z" />
+    <path
+        android:strokeColor="#006B55"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M43,57l7,7l15,-15" />
+</vector>
