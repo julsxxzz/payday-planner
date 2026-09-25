@@ -8,8 +8,8 @@ import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import kotlin.math.min
 
-/** How far back unpaid bills are still shown as overdue. */
-const val OVERDUE_LOOKBACK_DAYS = 120L
+/** How far back bills that aren't fully paid are still flagged as needing payment. */
+const val OVERDUE_LOOKBACK_DAYS = 366L
 
 /** A pay period: from one payday up to the day before the next payday. */
 data class Period(val start: LocalDate, val end: LocalDate) {
@@ -40,14 +40,73 @@ object Periods {
     }
 }
 
-/** One occurrence of a bill, plus its payment if it has been paid. */
-data class BillDue(val bill: Bill, val dueDate: LocalDate, val payment: Expense?) {
-    val paid: Boolean get() = payment != null
-    val amountCents: Long get() = payment?.amountCents ?: bill.amountCents
+/** One occurrence of a bill, plus any payments made toward it (oldest first). */
+data class BillDue(val bill: Bill, val dueDate: LocalDate, val payments: List<Expense> = emptyList()) {
+    val paidCents: Long get() = payments.sumOf { it.amountCents }
+
+    /** Fully paid: payments cover the bill amount, or one was marked as settling it. */
+    val settled: Boolean
+        get() = payments.isNotEmpty() && (paidCents >= bill.amountCents || payments.any { it.billSettled })
+
+    /** Some money paid, but not all of it. */
+    val partial: Boolean get() = payments.isNotEmpty() && !settled
+
+    val remainingCents: Long get() = if (settled) 0 else (bill.amountCents - paidCents).coerceAtLeast(0)
+
+    /** What this occurrence costs: the actual total once settled, otherwise the bill amount. */
+    val amountCents: Long get() = if (settled) paidCents else bill.amountCents
+
+    val lastPaidOn: LocalDate? get() = payments.maxOfOrNull { it.epochDay }?.let(LocalDate::ofEpochDay)
 
     /** "4 of 12" for bills with a fixed number of payments, otherwise null. */
     val installment: String?
         get() = bill.limitedPayments?.let { "${bill.paymentNumber(dueDate)} of $it" }
+
+    fun isOverdue(today: LocalDate): Boolean = !settled && dueDate.isBefore(today)
+
+    /** A payment toward this occurrence. [settle] marks it fully paid even if short of the amount. */
+    fun payment(amountCents: Long, paidOn: LocalDate, settle: Boolean) = Expense(
+        amountCents = amountCents,
+        note = bill.name,
+        category = bill.category,
+        epochDay = paidOn.toEpochDay(),
+        billId = bill.id,
+        billDueEpochDay = dueDate.toEpochDay(),
+        billSettled = settle || amountCents >= remainingCents,
+    )
+}
+
+enum class BillSort(val label: String) {
+    DueDate("Due date"),
+    Remaining("Amount left"),
+    Name("Name"),
+    UnpaidFirst("Unpaid first"),
+    ;
+
+    companion object {
+        fun from(name: String) = entries.firstOrNull { it.name == name } ?: DueDate
+    }
+}
+
+fun List<BillDue>.sortedFor(sort: BillSort): List<BillDue> = when (sort) {
+    BillSort.DueDate -> sortedWith(compareBy({ it.dueDate }, { it.bill.name.lowercase() }))
+    BillSort.Remaining -> sortedWith(compareByDescending<BillDue> { it.remainingCents }.thenBy { it.dueDate })
+    BillSort.Name -> sortedWith(compareBy({ it.bill.name.lowercase() }, { it.dueDate }))
+    BillSort.UnpaidFirst -> sortedWith(compareBy({ it.settled }, { it.partial }, { it.dueDate }))
+}
+
+/** Number of fully paid occurrences per bill id. */
+fun settledCounts(bills: List<Bill>, payments: List<Expense>): Map<Long, Int> {
+    val billsById = bills.associateBy { it.id }
+    return payments
+        .groupBy { it.billId to it.billDueEpochDay }
+        .mapNotNull { (key, list) ->
+            val bill = billsById[key.first] ?: return@mapNotNull null
+            val due = key.second ?: return@mapNotNull null
+            bill.id.takeIf { BillDue(bill, LocalDate.ofEpochDay(due), list).settled }
+        }
+        .groupingBy { it }
+        .eachCount()
 }
 
 /** Number of payments for a recurring bill that ends (e.g. a loan), or null if it doesn't end. */
@@ -86,11 +145,11 @@ fun buildBillDues(
     to: LocalDate,
     payments: List<Expense>,
 ): List<BillDue> {
-    val paymentByKey = payments.associateBy { it.billId to it.billDueEpochDay }
+    val paymentsByKey = payments.groupBy { it.billId to it.billDueEpochDay }
     return bills
         .flatMap { bill ->
             bill.dueDatesBetween(from, to).map { date ->
-                BillDue(bill, date, paymentByKey[bill.id to date.toEpochDay()])
+                BillDue(bill, date, paymentsByKey[bill.id to date.toEpochDay()].orEmpty().sortedBy { it.epochDay })
             }
         }
         .sortedWith(compareBy({ it.dueDate }, { it.bill.name }))

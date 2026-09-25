@@ -23,14 +23,13 @@ import androidx.compose.ui.unit.dp
 import com.paydayplanner.app.data.Bill
 import com.paydayplanner.app.data.Categories
 import com.paydayplanner.app.data.Expense
-import com.paydayplanner.app.domain.BillDue
 import com.paydayplanner.app.domain.Dates
 import com.paydayplanner.app.domain.Money
 import com.paydayplanner.app.domain.lastDueDate
 import java.time.LocalDate
 
 @Composable
-private fun FormColumn(content: @Composable () -> Unit) {
+internal fun FormColumn(content: @Composable () -> Unit) {
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -178,40 +177,6 @@ fun BillDialog(
                 onDismiss = onDismiss,
             )
         },
-    )
-}
-
-@Composable
-fun PayBillDialog(
-    due: BillDue,
-    currency: String,
-    onConfirm: (amountCents: Long, paidOn: LocalDate) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var amount by remember { mutableStateOf(Money.toInput(due.bill.amountCents)) }
-    var date by remember { mutableStateOf(LocalDate.now()) }
-    val cents = Money.parse(amount)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Pay ${due.bill.name}") },
-        text = {
-            FormColumn {
-                Text("Due ${Dates.long(due.dueDate)}", style = MaterialTheme.typography.bodyMedium)
-                MoneyField(amount, { amount = it }, "Amount paid", currency)
-                DateField("Paid on", date) { date = it }
-                Text(
-                    "This will be recorded as an expense on the date you paid it.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = cents != null && cents > 0, onClick = { onConfirm(cents!!, date) }) {
-                Text("Mark paid")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 

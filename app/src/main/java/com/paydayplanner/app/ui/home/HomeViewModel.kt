@@ -30,15 +30,15 @@ data class HomeState(
     val hasBudgetOverride: Boolean,
     /** Bills due within this period (paid and unpaid). */
     val dues: List<BillDue>,
-    /** Unpaid bills from earlier periods (only shown for the current period). */
+    /** Bills from earlier periods that aren't fully paid (only shown for the current period). */
     val overdue: List<BillDue>,
     val expenses: List<Expense>,
 ) {
     val spentTotal: Long = expenses.sumOf { it.amountCents }
     /** Everyday spending, i.e. expenses that aren't bill payments. Counts against the cap. */
     val everydaySpent: Long = expenses.filter { it.billId == null }.sumOf { it.amountCents }
-    val unpaidInPeriod: Long = dues.filter { !it.paid }.sumOf { it.bill.amountCents }
-    val unpaidOverdue: Long = overdue.sumOf { it.bill.amountCents }
+    val unpaidInPeriod: Long = dues.sumOf { it.remainingCents }
+    val unpaidOverdue: Long = overdue.sumOf { it.remainingCents }
     val billsTotal: Long = dues.sumOf { it.amountCents }
     /** Income minus everything spent minus every bill still waiting to be paid. */
     val safeToSpend: Long = incomeCents - spentTotal - unpaidInPeriod - unpaidOverdue
@@ -66,10 +66,10 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 budgetDao.get(period.start.toEpochDay()),
             ) { expenses, bills, payments, budget ->
                 val dues = buildBillDues(bills, period.start, period.end, payments)
-                    .filter { it.bill.active || it.paid }
+                    .filter { it.bill.active || it.payments.isNotEmpty() }
                 val overdue = if (isCurrent) {
                     buildBillDues(bills.filter { it.active }, lookback, period.start.minusDays(1), payments)
-                        .filter { !it.paid }
+                        .filter { !it.settled }
                 } else {
                     emptyList()
                 }
@@ -108,24 +108,8 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         viewModelScope.launch { expenseDao.delete(expense) }
     }
 
-    fun markPaid(due: BillDue, amountCents: Long, paidOn: LocalDate) {
-        viewModelScope.launch {
-            expenseDao.upsert(
-                Expense(
-                    amountCents = amountCents,
-                    note = due.bill.name,
-                    category = due.bill.category,
-                    epochDay = paidOn.toEpochDay(),
-                    billId = due.bill.id,
-                    billDueEpochDay = due.dueDate.toEpochDay(),
-                ),
-            )
-        }
-    }
-
-    fun markUnpaid(due: BillDue) {
-        val payment = due.payment ?: return
-        viewModelScope.launch { expenseDao.delete(payment) }
+    fun payBill(due: BillDue, amountCents: Long, paidOn: LocalDate, settle: Boolean) {
+        viewModelScope.launch { expenseDao.upsert(due.payment(amountCents, paidOn, settle)) }
     }
 
     fun saveBudget(incomeCents: Long, capCents: Long) {

@@ -19,8 +19,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -29,7 +27,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,15 +42,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.paydayplanner.app.data.Expense
-import com.paydayplanner.app.domain.BillDue
 import com.paydayplanner.app.domain.Dates
 import com.paydayplanner.app.domain.Money
 import com.paydayplanner.app.ui.components.ExpenseDialog
-import com.paydayplanner.app.ui.components.PayBillDialog
+import com.paydayplanner.app.ui.components.BillDueDialogs
+import com.paydayplanner.app.ui.components.BillDueRow
+import com.paydayplanner.app.ui.components.rememberBillDueSelection
 import com.paydayplanner.app.ui.components.PeriodBudgetDialog
 import java.time.LocalDate
 
@@ -63,7 +60,7 @@ fun HomeScreen(vm: HomeViewModel) {
     val loaded by vm.state.collectAsStateWithLifecycle()
     var addingExpense by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<Expense?>(null) }
-    var paying by remember { mutableStateOf<BillDue?>(null) }
+    val bills = rememberBillDueSelection()
     var editingBudget by remember { mutableStateOf(false) }
 
     val s = loaded
@@ -72,7 +69,6 @@ fun HomeScreen(vm: HomeViewModel) {
         return
     }
     val currency = s.settings.currency
-    val onToggleBill: (BillDue) -> Unit = { due -> if (due.paid) vm.markUnpaid(due) else paying = due }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -94,9 +90,11 @@ fun HomeScreen(vm: HomeViewModel) {
             item { SummaryCard(s, onEditBudget = { editingBudget = true }) }
 
             if (s.overdue.isNotEmpty()) {
-                item { SectionHeader("Overdue", Money.format(s.unpaidOverdue, currency), MaterialTheme.colorScheme.error) }
+                item {
+                    SectionHeader("Needs to be paid", Money.format(s.unpaidOverdue, currency), MaterialTheme.colorScheme.error)
+                }
                 items(s.overdue, key = { "o-${it.bill.id}-${it.dueDate}" }) { due ->
-                    BillDueRow(due, currency, overdue = true, onToggle = onToggleBill)
+                    BillDueRow(due, currency, onPay = { bills.pay(due) }, onOpen = { bills.open(due) })
                 }
             }
 
@@ -110,7 +108,7 @@ fun HomeScreen(vm: HomeViewModel) {
                 item { EmptyHint("No bills due this period. Add bills in the Bills tab.") }
             }
             items(s.dues, key = { "d-${it.bill.id}-${it.dueDate}" }) { due ->
-                BillDueRow(due, currency, overdue = false, onToggle = onToggleBill)
+                BillDueRow(due, currency, onPay = { bills.pay(due) }, onOpen = { bills.open(due) })
             }
 
             if (s.expenses.isNotEmpty()) {
@@ -137,14 +135,13 @@ fun HomeScreen(vm: HomeViewModel) {
             onDismiss = { addingExpense = false; editingExpense = null },
         )
     }
-    paying?.let { due ->
-        PayBillDialog(
-            due = due,
-            currency = currency,
-            onConfirm = { amount, date -> vm.markPaid(due, amount, date); paying = null },
-            onDismiss = { paying = null },
-        )
-    }
+    BillDueDialogs(
+        selection = bills,
+        dues = s.overdue + s.dues,
+        currency = currency,
+        onPay = vm::payBill,
+        onRemovePayment = vm::deleteExpense,
+    )
     if (editingBudget) {
         PeriodBudgetDialog(
             periodLabel = Dates.range(s.period),
@@ -260,44 +257,6 @@ private fun EmptyHint(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(vertical = 8.dp),
     )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BillDueRow(due: BillDue, currency: String, overdue: Boolean, onToggle: (BillDue) -> Unit) {
-    val errorColor = MaterialTheme.colorScheme.error
-    val status = when {
-        due.paid -> "Paid ${Dates.short(LocalDate.ofEpochDay(due.payment!!.epochDay))} · due ${Dates.short(due.dueDate)}"
-        overdue -> "Was due ${Dates.long(due.dueDate)}"
-        due.dueDate == LocalDate.now() -> "Due today"
-        else -> "Due ${Dates.short(due.dueDate)}"
-    }
-    val subtitle = due.installment?.let { "$status · payment $it" } ?: status
-    Card(
-        onClick = { onToggle(due) },
-        colors = CardDefaults.cardColors(
-            containerColor = if (due.paid) MaterialTheme.colorScheme.surfaceContainerLow
-            else MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-    ) {
-        ListItem(
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            leadingContent = { Checkbox(checked = due.paid, onCheckedChange = { onToggle(due) }) },
-            headlineContent = {
-                Text(due.bill.name, textDecoration = if (due.paid) TextDecoration.LineThrough else null)
-            },
-            supportingContent = {
-                Text(subtitle, color = if (overdue && !due.paid) errorColor else Color.Unspecified)
-            },
-            trailingContent = {
-                Text(
-                    Money.format(due.amountCents, currency),
-                    style = MaterialTheme.typography.titleSmall,
-                    textDecoration = if (due.paid) TextDecoration.LineThrough else null,
-                )
-            },
-        )
-    }
 }
 
 @Composable

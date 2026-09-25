@@ -3,6 +3,7 @@ package com.paydayplanner.app.domain
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
@@ -30,6 +31,12 @@ object Dates {
 
     fun short(d: LocalDate): String = d.format(shortFmt)
     fun long(d: LocalDate): String = d.format(longFmt)
+
+    private val monthFmt = DateTimeFormatter.ofPattern("MMMM yyyy")
+    private val monthNameFmt = DateTimeFormatter.ofPattern("MMMM")
+
+    fun month(m: YearMonth): String = m.format(monthFmt)
+    fun monthName(m: YearMonth): String = m.format(monthNameFmt)
 
     fun range(p: Period): String =
         if (p.start.year == p.end.year) "${short(p.start)} – ${long(p.end)}"

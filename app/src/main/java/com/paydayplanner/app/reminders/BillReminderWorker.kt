@@ -38,7 +38,7 @@ class BillReminderWorker(context: Context, params: WorkerParameters) : Coroutine
         val to = today.plusDays(settings.remindDaysBefore.toLong())
         val bills = container.db.billDao().activeOnce()
         val payments = container.db.expenseDao().billPaymentsDueBetweenOnce(from.toEpochDay(), to.toEpochDay())
-        val unpaid = buildBillDues(bills, from, to, payments).filter { !it.paid }
+        val unpaid = buildBillDues(bills, from, to, payments).filter { !it.settled }
         if (unpaid.isEmpty()) return Result.success()
 
         val lines = unpaid.map { due ->
@@ -47,9 +47,9 @@ class BillReminderWorker(context: Context, params: WorkerParameters) : Coroutine
                 due.dueDate == today -> "due today"
                 else -> "due ${Dates.short(due.dueDate)}"
             }
-            "${due.bill.name} · ${Money.format(due.bill.amountCents, settings.currency)} · $whenText"
+            "${due.bill.name} · ${Money.format(due.remainingCents, settings.currency)}${if (due.partial) " left" else ""} · $whenText"
         }
-        val total = Money.format(unpaid.sumOf { it.bill.amountCents }, settings.currency)
+        val total = Money.format(unpaid.sumOf { it.remainingCents }, settings.currency)
         val title = if (unpaid.size == 1) "1 bill to pay" else "${unpaid.size} bills to pay"
 
         val openApp = PendingIntent.getActivity(

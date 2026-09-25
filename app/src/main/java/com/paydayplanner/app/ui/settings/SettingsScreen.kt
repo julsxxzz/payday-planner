@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.paydayplanner.app.data.Settings
 import com.paydayplanner.app.domain.Dates
 import com.paydayplanner.app.domain.Money
 import com.paydayplanner.app.reminders.BillReminderWorker
@@ -127,7 +126,7 @@ fun SettingsScreen(vm: SettingsViewModel) {
                 enabled = valid,
                 onClick = {
                     vm.save(
-                        Settings(
+                        s.copy(
                             payday1 = d1!!,
                             payday2 = d2!!,
                             income1 = Money.parse(income1) ?: 0,

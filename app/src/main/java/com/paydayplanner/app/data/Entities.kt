@@ -1,19 +1,21 @@
 package com.paydayplanner.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Money you spent. If [billId] is set, this expense is the payment of a bill
- * occurrence that was due on [billDueEpochDay].
- * Amounts are stored in cents to avoid floating point rounding.
+ * Money you spent. If [billId] is set, this expense is a (possibly partial) payment of the
+ * bill occurrence that was due on [billDueEpochDay]. [billSettled] marks the occurrence as
+ * fully paid even if the payments add up to less than the bill amount (e.g. a smaller
+ * electricity bill). Amounts are stored in cents to avoid floating point rounding.
  */
 @Entity(
     tableName = "expenses",
     indices = [
         Index("epochDay"),
-        Index(value = ["billId", "billDueEpochDay"], unique = true),
+        Index(value = ["billId", "billDueEpochDay"]),
     ],
 )
 data class Expense(
@@ -24,6 +26,7 @@ data class Expense(
     val epochDay: Long,
     val billId: Long? = null,
     val billDueEpochDay: Long? = null,
+    @ColumnInfo(defaultValue = "0") val billSettled: Boolean = false,
 )
 
 /**

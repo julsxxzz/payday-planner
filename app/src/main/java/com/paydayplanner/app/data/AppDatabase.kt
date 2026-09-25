@@ -21,8 +21,8 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE billId IS NOT NULL AND billDueEpochDay BETWEEN :from AND :to")
     suspend fun billPaymentsDueBetweenOnce(from: Long, to: Long): List<Expense>
 
-    @Query("SELECT billId, COUNT(*) AS paid FROM expenses WHERE billId IS NOT NULL GROUP BY billId")
-    fun paidCountsPerBill(): Flow<List<BillPaidCount>>
+    @Query("SELECT * FROM expenses WHERE billId IS NOT NULL ORDER BY epochDay, id")
+    fun allBillPayments(): Flow<List<Expense>>
 
     @Upsert
     suspend fun upsert(expense: Expense)
@@ -58,9 +58,7 @@ interface PeriodBudgetDao {
     suspend fun clear(start: Long)
 }
 
-data class BillPaidCount(val billId: Long, val paid: Int)
-
-@Database(entities = [Expense::class, Bill::class, PeriodBudget::class], version = 2, exportSchema = false)
+@Database(entities = [Expense::class, Bill::class, PeriodBudget::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun billDao(): BillDao
@@ -71,6 +69,20 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE bills ADD COLUMN totalPayments INTEGER")
+            }
+        }
+
+        /** v3: partial payments. A bill occurrence can have several payments. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP INDEX IF EXISTS `index_expenses_billId_billDueEpochDay`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_expenses_billId_billDueEpochDay` " +
+                        "ON `expenses` (`billId`, `billDueEpochDay`)",
+                )
+                db.execSQL("ALTER TABLE expenses ADD COLUMN billSettled INTEGER NOT NULL DEFAULT 0")
+                // Before v3 a single payment always meant "paid", so keep existing bills paid.
+                db.execSQL("UPDATE expenses SET billSettled = 1 WHERE billId IS NOT NULL")
             }
         }
     }

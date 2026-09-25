@@ -28,6 +28,8 @@ data class Settings(
     val currency: String = defaultCurrencySymbol(),
     val remindersEnabled: Boolean = true,
     val remindDaysBefore: Int = 2,
+    /** How the Bills tab is sorted (name of a BillSort value). */
+    val billSort: String = "DueDate",
 )
 
 private fun defaultCurrencySymbol(): String =
@@ -45,6 +47,7 @@ class SettingsRepository(private val context: Context) {
         val currency = stringPreferencesKey("currency")
         val reminders = booleanPreferencesKey("reminders")
         val remindDays = intPreferencesKey("remind_days")
+        val billSort = stringPreferencesKey("bill_sort")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -64,6 +67,7 @@ class SettingsRepository(private val context: Context) {
             currency = this[Keys.currency] ?: d.currency,
             remindersEnabled = this[Keys.reminders] ?: d.remindersEnabled,
             remindDaysBefore = this[Keys.remindDays] ?: d.remindDaysBefore,
+            billSort = this[Keys.billSort] ?: d.billSort,
         )
     }
 
@@ -76,5 +80,6 @@ class SettingsRepository(private val context: Context) {
         this[Keys.currency] = s.currency
         this[Keys.reminders] = s.remindersEnabled
         this[Keys.remindDays] = s.remindDaysBefore
+        this[Keys.billSort] = s.billSort
     }
 }
